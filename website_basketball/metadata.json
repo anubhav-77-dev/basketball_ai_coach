@@ -1,0 +1,6 @@
+{
+  "name": "Shot Doctor AI",
+  "description": "An AI-powered basketball shooting coach that analyzes your jump shot form using video analysis and provides detailed feedback for improvement.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

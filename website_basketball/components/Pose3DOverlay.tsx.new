@@ -1,0 +1,318 @@
+import React, { useRef, useEffect, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, Sphere } from "@react-three/drei";
+import * as THREE from "three";
+import { Pose } from "@mediapipe/pose";
+import BallTrajectory3D from "./BallTrajectory3D";
+import BasketballCourt3D from "./BasketballCourt3D";
+
+const VIDEO_PATH = "/final_ball.mov";
+const CANVAS_WIDTH = 640;
+const CANVAS_HEIGHT = 360;
+const YOLO_FPS = 60; // Match your YOLO inference FPS
+const TOTAL_FRAMES = 2014; // frame_0000.json to frame_2013.json
+
+// Define the connection pairs for the 3D skeleton
+const POSE_CONNECTIONS_3D = [
+  [11, 12], // Shoulders
+  [12, 14], // Right shoulder to right elbow
+  [14, 16], // Right elbow to right wrist
+  [11, 13], // Left shoulder to left elbow
+  [13, 15], // Left elbow to left wrist
+  [11, 23], // Left shoulder to left hip
+  [12, 24], // Right shoulder to right hip
+  [23, 24], // Hips
+  [23, 25], // Left hip to left knee
+  [25, 27], // Left knee to left ankle
+  [24, 26], // Right hip to right knee
+  [26, 28], // Right knee to right ankle
+];
+
+interface Landmark {
+  x: number;
+  y: number;
+  z: number;
+  visibility?: number;
+}
+
+interface PoseData {
+  poseLandmarks: Landmark[];
+}
+
+interface PoseSkeletonProps {
+  poseData: PoseData | null;
+  color?: string;
+}
+
+// Human skeleton component
+const PoseSkeleton: React.FC<PoseSkeletonProps> = ({ poseData, color = "#F97316" }) => {
+  const { scene } = useThree();
+  const skeletonRef = useRef<THREE.Group>(null);
+  
+  useEffect(() => {
+    // Clean up any previous bones
+    if (skeletonRef.current) {
+      // This is a safe operation in Three.js but TypeScript doesn't know about it
+      // We'd need more complex cleanup here in a full implementation
+    }
+  }, [poseData, scene]);
+
+  if (!poseData || !poseData.poseLandmarks) return null;
+
+  return (
+    <group ref={skeletonRef}>
+      {/* Joints (keypoints) */}
+      {poseData.poseLandmarks.map((landmark, i) => (
+        (landmark.visibility && landmark.visibility > 0.5) && (
+          <Sphere 
+            key={`joint-${i}`} 
+            position={[
+              (landmark.x - 0.5) * 2, 
+              -(landmark.y - 0.5) * 2, 
+              landmark.z * 2
+            ]} 
+            args={[0.03]} 
+          >
+            <meshStandardMaterial color={color} />
+          </Sphere>
+        )
+      ))}
+      
+      {/* Bones (connections) */}
+      {POSE_CONNECTIONS_3D.map((pair, i) => {
+        const [idx1, idx2] = pair;
+        const start = poseData.poseLandmarks[idx1];
+        const end = poseData.poseLandmarks[idx2];
+        
+        if (!start || !end || 
+            !start.visibility || !end.visibility || 
+            start.visibility < 0.5 || end.visibility < 0.5) {
+          return null;
+        }
+        
+        const startVec = new THREE.Vector3(
+          (start.x - 0.5) * 2,
+          -(start.y - 0.5) * 2,
+          start.z * 2
+        );
+        
+        const endVec = new THREE.Vector3(
+          (end.x - 0.5) * 2,
+          -(end.y - 0.5) * 2,
+          end.z * 2
+        );
+        
+        // Create geometry for the bone
+        const geometry = new THREE.BufferGeometry().setFromPoints([startVec, endVec]);
+        
+        return (
+          // Note: In React Three Fiber, we use the primitive element to render a THREE.Line
+          <primitive 
+            key={`bone-${i}`} 
+            object={new THREE.Line(
+              geometry, 
+              new THREE.LineBasicMaterial({ color: color, linewidth: 2 })
+            )} 
+          />
+        );
+      })}
+    </group>
+  );
+};
+
+interface BasketballProps {
+  position: [number, number, number] | null;
+  size?: number;
+}
+
+// Basketball component
+const Basketball: React.FC<BasketballProps> = ({ position, size = 0.15 }) => {
+  if (!position) return null;
+  
+  return (
+    <Sphere position={position} args={[size]}>
+      <meshStandardMaterial color="orange" roughness={0.8} />
+    </Sphere>
+  );
+};
+
+interface SceneProps {
+  poseResults: PoseData | null;
+  ballPosition: [number, number, number] | null;
+  ballTrajectory: Array<{ time: number; position: [number, number, number] }>;
+}
+
+// Scene component
+const Scene: React.FC<SceneProps> = ({ poseResults, ballPosition, ballTrajectory }) => {
+  return (
+    <>
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[10, 10, 5]} intensity={1} />
+      <PoseSkeleton poseData={poseResults} />
+      <Basketball position={ballPosition} />
+      <BallTrajectory3D positions={ballTrajectory} />
+      <BasketballCourt3D />
+      <OrbitControls />
+    </>
+  );
+};
+
+const Pose3DOverlay: React.FC = () => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [ready, setReady] = useState(false);
+  const [poseModel, setPoseModel] = useState<Pose | null>(null);
+  const lastPoseResults = useRef<PoseData | null>(null);
+  const [yoloData, setYoloData] = useState<{ [key: string]: any[] }>({});
+  const [ballPosition, setBallPosition] = useState<[number, number, number] | null>(null);
+  const [ballTrajectory, setBallTrajectory] = useState<Array<{ time: number; position: [number, number, number] }>>([]);
+  const maxTrajectoryPoints = 100; // Limit the number of points to avoid performance issues
+
+  // Preload all YOLO JSON files into memory
+  useEffect(() => {
+    const loadAllYolo = async () => {
+      const data: { [key: string]: any[] } = {};
+      await Promise.all(
+        Array.from({ length: TOTAL_FRAMES }).map(async (_, i) => {
+          const idx = String(i).padStart(4, "0");
+          try {
+            const res = await fetch(`/yolo_results/frame_${idx}.json`);
+            const json = await res.json();
+            data[idx] = json;
+          } catch (e) {
+            data[idx] = [];
+            console.error(`Failed to load YOLO frame ${idx}:`, e);
+          }
+        })
+      );
+      setYoloData(data);
+      console.log('All YOLO data loaded');
+    };
+    loadAllYolo();
+  }, []);
+
+  // Load pose model
+  useEffect(() => {
+    const pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+    });
+    pose.setOptions({
+      modelComplexity: 2, // Higher model complexity for better 3D estimation
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+    setPoseModel(pose);
+  }, []);
+
+  // Run pose detection and store latest results
+  useEffect(() => {
+    if (!ready || !videoRef.current || !poseModel) return;
+    let animationId: number;
+
+    poseModel.onResults((results) => {
+      lastPoseResults.current = results as unknown as PoseData;
+    });
+
+    const processFrame = async () => {
+      if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
+        await poseModel.send({ image: videoRef.current });
+      }
+      animationId = requestAnimationFrame(processFrame);
+    };
+    processFrame();
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [ready, poseModel]);
+
+  // Update ball position from YOLO data
+  useEffect(() => {
+    if (!ready || !videoRef.current) return;
+    let animationId: number;
+
+    const updateBallPosition = () => {
+      const video = videoRef.current;
+      if (!video) {
+        animationId = requestAnimationFrame(updateBallPosition);
+        return;
+      }
+
+      const currentTime = video.currentTime;
+      const frameIdx = Math.min(Math.floor(currentTime * YOLO_FPS), TOTAL_FRAMES - 1);
+      const idxStr = String(frameIdx).padStart(4, "0");
+      const detections = yoloData[idxStr] || [];
+      
+      const ball = detections.find((det: any) => det.name === "sports ball" || det.name === "basketball");
+      
+      if (ball && ball.box) {
+        const { x1, y1, x2, y2 } = ball.box;
+        const cx = (x1 + x2) / 2;
+        const cy = (y1 + y2) / 2;
+        
+        // Convert from pixel coordinates to Three.js world coordinates
+        // x and y are mapped to range [-1, 1], z is estimated based on ball size
+        const worldX = (cx / CANVAS_WIDTH - 0.5) * 2;
+        const worldY = -(cy / CANVAS_HEIGHT - 0.5) * 2;
+        
+        // Estimate z-position based on ball size (larger balls are closer)
+        const ballWidth = x2 - x1;
+        const normalizedSize = ballWidth / CANVAS_WIDTH;
+        const worldZ = -normalizedSize * 10; // Simple estimation
+        
+        const newPos: [number, number, number] = [worldX, worldY, worldZ];
+        setBallPosition(newPos);
+        
+        // Add to trajectory
+        setBallTrajectory(prev => {
+          const newTrajectory = [...prev, { time: currentTime, position: newPos }];
+          // Keep only the last N points to avoid performance issues
+          return newTrajectory.slice(-maxTrajectoryPoints);
+        });
+      } else {
+        setBallPosition(null);
+      }
+
+      animationId = requestAnimationFrame(updateBallPosition);
+    };
+    
+    updateBallPosition();
+    return () => cancelAnimationFrame(animationId);
+  }, [ready, yoloData]);
+
+  return (
+    <div className="relative w-full max-w-2xl mx-auto">
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Original video */}
+        <div className="flex-1">
+          <video
+            ref={videoRef}
+            src={VIDEO_PATH}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            controls
+            onPlay={() => setReady(true)}
+            className="rounded-lg shadow-lg w-full"
+          />
+          <div className="text-center mt-2 text-gray-400 text-sm">Original video</div>
+        </div>
+        
+        {/* 3D visualization */}
+        <div className="flex-1 h-[360px]">
+          <Canvas className="rounded-lg shadow-lg">
+            <Scene 
+              poseResults={lastPoseResults.current} 
+              ballPosition={ballPosition} 
+              ballTrajectory={ballTrajectory}
+            />
+          </Canvas>
+          <div className="text-center mt-2 text-gray-400 text-sm">
+            3D visualization (drag to rotate)
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Pose3DOverlay;
