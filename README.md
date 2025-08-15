@@ -40,13 +40,20 @@ basketball_ai_coach/
 │   ├── services/                # API services
 │   ├── utils/                   # Utility functions
 │   ├── context/                 # React context
-│   └── public/                  # Static assets
+│   ├── public/                  # Static assets
+│   ├── best.pt                  # Custom trained YOLO model ✅
+│   └── yolov8n.pt               # YOLO base model ✅
 ├── server/                      # Python backend
 │   ├── app.py                   # FastAPI application
 │   ├── ball_tracker.py          # Ball tracking logic
 │   └── llm_service.py           # AI service integration
 ├── 3d-version/                  # 3D visualization components
-└── detect_ball.py               # YOLO ball detection script
+│   ├── best.pt                  # 3D analysis model ✅
+│   └── yolov8n.pt               # 3D YOLO model ✅
+├── detect_ball.py               # YOLO ball detection script
+├── .gitattributes               # Git LFS configuration ✅
+├── SETUP.md                     # Complete setup guide ✅
+└── requirements.txt             # Python dependencies ✅
 ```
 
 ## 🛠️ Installation
@@ -55,26 +62,39 @@ basketball_ai_coach/
 - Node.js (v16 or higher)
 - Python 3.9+
 - Git
+- Git LFS (Large File Storage)
 
-### Frontend Setup
+### Quick Start
 ```bash
+# 1. Clone the repository
+git clone https://github.com/anubhav-77-dev/basketball_ai_coach.git
+cd basketball_ai_coach
+
+# 2. Install Git LFS and download large files
+# macOS:
+brew install git-lfs
+git lfs install
+git lfs pull
+
+# Windows/Linux:
+# Download from https://git-lfs.github.com/
+git lfs install
+git lfs pull
+
+# 3. Frontend Setup
 cd website_basketball
 npm install
 npm start
-```
 
-### Backend Setup
-```bash
-# Create virtual environment
+# 4. Backend Setup (in another terminal)
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Start the server
 python server/app.py
 ```
+
+### Detailed Setup
+For comprehensive setup instructions, see [SETUP.md](SETUP.md).
 
 ## 🔧 Configuration
 
@@ -89,8 +109,8 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 SERVER_PORT=8000
 CORS_ORIGINS=http://localhost:3000
 
-# Model Paths
-YOLO_MODEL_PATH=path/to/your/model.pt
+# Model Paths (automatically configured)
+YOLO_MODEL_PATH=website_basketball/best.pt
 ```
 
 ## 📖 Usage
@@ -104,7 +124,7 @@ YOLO_MODEL_PATH=path/to/your/model.pt
 ## 🎯 Key Features
 
 ### Ball Detection
-- Uses YOLO model trained specifically for basketball detection
+- Uses custom-trained YOLO model specifically for basketball detection ✅
 - Real-time tracking with confidence scoring
 - Handles various lighting conditions and angles
 
@@ -122,6 +142,29 @@ YOLO_MODEL_PATH=path/to/your/model.pt
 - Three.js powered 3D ball trajectory
 - Interactive camera controls
 - Real-time rendering of shot paths
+
+## 📊 Included Models
+
+| Model File | Size | Purpose | Status |
+|------------|------|---------|--------|
+| `website_basketball/best.pt` | 6.0MB | Custom basketball detection | ✅ Included |
+| `website_basketball/yolov8n.pt` | 6.2MB | Base YOLO model | ✅ Included |
+| `website_basketball/3d-version/best.pt` | 6.0MB | 3D analysis model | ✅ Included |
+| `website_basketball/3d-version/yolov8n.pt` | 6.2MB | 3D YOLO model | ✅ Included |
+
+**Total Model Size**: ~24.4MB (efficiently managed with Git LFS)
+
+## 🎯 Large Files Management
+
+This repository uses **Git LFS (Large File Storage)** to efficiently handle large model files:
+
+- ✅ **All models included** - No missing files
+- ✅ **Fast repository** - Git LFS keeps repo size manageable
+- ✅ **Automatic download** - `git lfs pull` gets all large files
+- ✅ **Version control** - Track model changes over time
+- ✅ **Professional approach** - Industry-standard solution
+
+For detailed information, see [LARGE_FILES_GUIDE.md](LARGE_FILES_GUIDE.md).
 
 ## 🤝 Contributing
 
@@ -148,4 +191,4 @@ For support and questions, please open an issue on GitHub or contact the develop
 
 ---
 
-**Note**: This repository excludes large model files and virtual environments for size optimization. Please refer to the setup instructions to install dependencies locally. 
+**Note**: This repository includes all necessary model files and is ready to use immediately after setup. Large files are efficiently managed with Git LFS for optimal performance. 🚀 
