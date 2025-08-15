@@ -10,21 +10,6 @@ venv_shot_doctor/
 .env.production
 .env.development
 
-# Large model files
-*.pt
-*.pth
-*.onnx
-*.tflite
-*.h5
-*.pb
-*.weights
-*.model
-
-# YOLO model files
-best.pt
-yolov8*.pt
-yolov5*.pt
-
 # Node modules
 node_modules/
 website_basketball/node_modules/
@@ -209,44 +194,6 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# Video files (large)
-*.mp4
-*.mov
-*.avi
-*.mkv
-*.wmv
-*.flv
-*.webm
-
-# Image files (if too large)
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.bmp
-*.tiff
-*.webp
-
-# Audio files
-*.mp3
-*.wav
-*.flac
-*.aac
-*.ogg
-
-# Archive files
-*.zip
-*.rar
-*.7z
-*.tar
-*.gz
-*.bz2
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
 # Temporary files
 *.tmp
 *.temp
@@ -260,9 +207,12 @@ public/yolo_results/
 public/yolo_results_lowconf/
 public/runs/
 
-# Large data files
-*.csv
-*.json
-*.xml
-*.yaml
-*.yml
+# Large data files (but allow essential ones)
+# *.csv
+# *.json
+# *.xml
+# *.yaml
+# *.yml
+
+# Note: Large model files (*.pt, *.pth, etc.) are now handled by Git LFS
+# and should be tracked in version control for the application to work
